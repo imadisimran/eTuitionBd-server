@@ -19,9 +19,31 @@ const client = new MongoClient(uri, {
   },
 });
 
+//Collections
+const db=client.db('eTuitionBD')
+const usersCollection=db.collection('users')
+
 app.get("/", (req, res) => {
   res.send({ message: "eTuitionBD backend is working" });
 });
+
+app.post('/users',async (req,res)=>{
+  const data=req.body
+  // console.log(data)
+  const userData={
+    displayName:data.displayName,
+    photoURL:data.photoURL,
+    email:data.email,
+    createdAt:new Date(),
+    role:'student'
+  }
+  const result=await usersCollection.insertOne(userData)
+  res.send(result)
+})
+
+app.get('/users',(req,res)=>{
+  res.send({message:'result'})
+})
 
 async function run() {
   try {
