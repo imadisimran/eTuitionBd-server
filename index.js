@@ -27,6 +27,7 @@ app.get("/", (req, res) => {
   res.send({ message: "eTuitionBD backend is working" });
 });
 
+//User apis
 app.post("/user", async (req, res) => {
   const data = req.body;
   // console.log(data)
@@ -61,9 +62,11 @@ app.get("/user", async (req, res) => {
 });
 
 app.patch("/user", async (req, res) => {
-  const {email}=req.query
+  const { email } = req.query;
   const query = {};
-  query.email=email
+  if (email) {
+    query.email = email;
+  }
   const {
     photoURL,
     deleteURL,
@@ -74,6 +77,7 @@ app.patch("/user", async (req, res) => {
     district,
     guardianRelation,
     guardianPhone,
+    address
   } = req.body;
   if (photoURL) {
     const update = {
@@ -94,6 +98,7 @@ app.patch("/user", async (req, res) => {
         class: studentClass,
         division: division,
         district: district,
+        address:address,
         guardian: {
           relation: guardianRelation,
           phone: guardianPhone,
