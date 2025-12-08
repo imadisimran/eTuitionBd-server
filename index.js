@@ -11,101 +11,67 @@ app.use(cors());
 
 //functions
 const checkProfile = (user) => {
+  // 1. Safety Check: Return immediately if no user provided
+  if (!user)
+    return {
+      percent: 0,
+      isReady: false,
+      missingItems: ["User profile not found"],
+    };
+
   let score = 0;
   let totalPoints = 0;
   let missing = [];
 
-  //     {
-  // "_id": "69354a0b68ce2d912eb7c120",
-  // "displayName": "Imad Imran",
-  // "photoURL": "https://i.ibb.co/6cCcqFxZ/628-camedia.png",
-  // "email": "imadisimran@gmail.com",
-  // "createdAt": "2025-12-07T09:34:03.352Z",
-  // "role": "student",
-  // "phone": "01743345953",
-  // "studentInfo": {
-  // "class": "hsc2",
-  // "division": "Dhaka",
-  // "district": "Dhaka",
-  // "address": "Uttor Badda",
-  // "guardian": {
-  // "relation": "father",
-  // "phone": "01713372168"
-  // }
-  // },
-  // "deleteURL": "https://ibb.co/CpGpSQZt/8306f1b7cf12b30eb3d570d12c92fbd0",
-  // "icon": "https://i.ibb.co/CpGpSQZt/628-camedia.png"
-  // }
-  totalPoints++;
-  if (user.phone) {
-    score++;
-  } else {
-    missing.push("Phone Number");
-  }
-
-  // IF USER IS A STUDENT
-  if (user.role === "student") {
-    const studentFields = ["class", "division", "district", "address"];
-
-    // Give 20 points for each field
-    studentFields.forEach((field) => {
-      totalPoints++;
-      // Check if studentProfile exists AND the field has data
-      if (user.studentInfo && user.studentInfo[field]) {
-        score++;
-      } else {
-        missing.push(field);
-      }
-    });
-
-    //Checking guardian info
-    const guardianFields = ["relation", "phone"];
-    guardianFields.forEach((field) => {
-      totalPoints++;
-      if (
-        user.studentInfo &&
-        user.studentInfo.guardian &&
-        user.studentInfo.guardian[field]
-      ) {
-        score++;
-      } else {
-        missing.push(field);
-      }
-    });
-  }
-
-  // IF USER IS A TUTOR
-  if (user.role === "tutor") {
-    const tutorFields = ["institution", "salary", "bio", "subjects"];
-
-    // Give 20 points for each field
-    tutorFields.forEach((field) => {
-      totalPoints += 20;
-      if (user.tutorProfile && user.tutorProfile[field]) {
-        score += 20;
-      } else {
-        missing.push(field);
-      }
-    });
-
-    // SPECIAL CHECK: Education Array
-    totalPoints += 20;
-    if (
-      user.tutorProfile &&
-      user.tutorProfile.education &&
-      user.tutorProfile.education.length > 0
-    ) {
-      score += 20;
+  // Helper function to keep code DRY (Don't Repeat Yourself)
+  const checkField = (value, label) => {
+    totalPoints++;
+    // Check if value exists and is not an empty string
+    if (value) {
+      score++;
     } else {
-      missing.push("Education History");
+      missing.push(label);
     }
+  };
+
+  // --- Check Root Info ---
+  checkField(user.phone, "Phone Number");
+
+  // --- Check Student Info ---
+  if (user.role === "student") {
+    // fields with specific human-readable labels
+    const studentChecks = [
+      { key: "class", label: "Class" },
+      { key: "division", label: "Division" },
+      { key: "district", label: "District" },
+      { key: "address", label: "Address" },
+    ];
+
+    studentChecks.forEach((item) => {
+      // Use optional chaining (?.) to safely access nested data
+      const value = user.studentInfo?.[item.key];
+      checkField(value, item.label);
+    });
+
+    // --- Check Guardian Info ---
+    const guardianChecks = [
+      { key: "relation", label: "Guardian Relation" },
+      { key: "phone", label: "Guardian Phone Number" },
+    ];
+
+    guardianChecks.forEach((item) => {
+      // Safely access user -> studentInfo -> guardian -> key
+      const value = user.studentInfo?.guardian?.[item.key];
+      checkField(value, item.label);
+    });
   }
 
+  // Calculate Percentage
   const percentage = totalPoints === 0 ? 0 : (score / totalPoints) * 100;
 
   return {
     percent: Math.round(percentage),
-    isReady: percentage === 100, // True if 100%, False if less
+    isReady: percentage === 100,
     missingItems: missing,
   };
 };
@@ -154,11 +120,13 @@ app.post("/user", async (req, res) => {
 
 app.get("/user", async (req, res) => {
   const query = {};
-  const email = req.query.email;
+  const { email } = req.query;
   if (email) {
     query.email = email;
   }
   const user = await usersCollection.findOne(query);
+  const profileStatus = checkProfile(user);
+  user.profileStatus=profileStatus
   res.send(user);
 });
 
