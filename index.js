@@ -20,30 +20,91 @@ const client = new MongoClient(uri, {
 });
 
 //Collections
-const db=client.db('eTuitionBD')
-const usersCollection=db.collection('users')
+const db = client.db("eTuitionBD");
+const usersCollection = db.collection("users");
 
 app.get("/", (req, res) => {
   res.send({ message: "eTuitionBD backend is working" });
 });
 
-app.post('/users',async (req,res)=>{
-  const data=req.body
+app.post("/user", async (req, res) => {
+  const data = req.body;
   // console.log(data)
-  const userData={
-    displayName:data.displayName,
-    photoURL:data.photoURL,
-    email:data.email,
-    createdAt:new Date(),
-    role:'student'
+  if (data?.email) {
+    const isUserExist = await usersCollection.findOne(
+      { email: data.email },
+      { projection: { _id: 1 } }
+    );
+    if (isUserExist) {
+      return res.send(isUserExist);
+    }
   }
-  const result=await usersCollection.insertOne(userData)
-  res.send(result)
-})
+  const userData = {
+    displayName: data.displayName,
+    photoURL: data.photoURL,
+    email: data.email,
+    createdAt: new Date(),
+    role: "student",
+  };
+  const result = await usersCollection.insertOne(userData);
+  res.send(result);
+});
 
-app.get('/users',(req,res)=>{
-  res.send({message:'result'})
-})
+app.get("/user", async (req, res) => {
+  const query = {};
+  const email = req.query.email;
+  if (email) {
+    query.email = email;
+  }
+  const user = await usersCollection.findOne(query);
+  res.send(user);
+});
+
+app.patch("/user", async (req, res) => {
+  const {email}=req.query
+  const query = {};
+  query.email=email
+  const {
+    photoURL,
+    deleteURL,
+    icon,
+    phone,
+    studentClass,
+    division,
+    district,
+    guardianRelation,
+    guardianPhone,
+  } = req.body;
+  if (photoURL) {
+    const update = {
+      $set: {
+        photoURL: photoURL,
+        icon: icon,
+        deleteURL: deleteURL,
+      },
+    };
+
+    const updateRes = await usersCollection.updateOne(query, update);
+    return res.send(updateRes);
+  }
+  const update = {
+    $set: {
+      phone: phone,
+      studentInfo: {
+        class: studentClass,
+        division: division,
+        district: district,
+        guardian: {
+          relation: guardianRelation,
+          phone: guardianPhone,
+        },
+      },
+    },
+  };
+
+  const updateRes = await usersCollection.updateOne(query, update);
+  res.send(updateRes);
+});
 
 async function run() {
   try {
