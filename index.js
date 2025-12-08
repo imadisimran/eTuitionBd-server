@@ -9,6 +9,107 @@ const port = process.env.PORT || 3000;
 app.use(express.json());
 app.use(cors());
 
+//functions
+const checkProfile = (user) => {
+  let score = 0;
+  let totalPoints = 0;
+  let missing = [];
+
+  //     {
+  // "_id": "69354a0b68ce2d912eb7c120",
+  // "displayName": "Imad Imran",
+  // "photoURL": "https://i.ibb.co/6cCcqFxZ/628-camedia.png",
+  // "email": "imadisimran@gmail.com",
+  // "createdAt": "2025-12-07T09:34:03.352Z",
+  // "role": "student",
+  // "phone": "01743345953",
+  // "studentInfo": {
+  // "class": "hsc2",
+  // "division": "Dhaka",
+  // "district": "Dhaka",
+  // "address": "Uttor Badda",
+  // "guardian": {
+  // "relation": "father",
+  // "phone": "01713372168"
+  // }
+  // },
+  // "deleteURL": "https://ibb.co/CpGpSQZt/8306f1b7cf12b30eb3d570d12c92fbd0",
+  // "icon": "https://i.ibb.co/CpGpSQZt/628-camedia.png"
+  // }
+  totalPoints++;
+  if (user.phone) {
+    score++;
+  } else {
+    missing.push("Phone Number");
+  }
+
+  // IF USER IS A STUDENT
+  if (user.role === "student") {
+    const studentFields = ["class", "division", "district", "address"];
+
+    // Give 20 points for each field
+    studentFields.forEach((field) => {
+      totalPoints++;
+      // Check if studentProfile exists AND the field has data
+      if (user.studentInfo && user.studentInfo[field]) {
+        score++;
+      } else {
+        missing.push(field);
+      }
+    });
+
+    //Checking guardian info
+    const guardianFields = ["relation", "phone"];
+    guardianFields.forEach((field) => {
+      totalPoints++;
+      if (
+        user.studentInfo &&
+        user.studentInfo.guardian &&
+        user.studentInfo.guardian[field]
+      ) {
+        score++;
+      } else {
+        missing.push(field);
+      }
+    });
+  }
+
+  // IF USER IS A TUTOR
+  if (user.role === "tutor") {
+    const tutorFields = ["institution", "salary", "bio", "subjects"];
+
+    // Give 20 points for each field
+    tutorFields.forEach((field) => {
+      totalPoints += 20;
+      if (user.tutorProfile && user.tutorProfile[field]) {
+        score += 20;
+      } else {
+        missing.push(field);
+      }
+    });
+
+    // SPECIAL CHECK: Education Array
+    totalPoints += 20;
+    if (
+      user.tutorProfile &&
+      user.tutorProfile.education &&
+      user.tutorProfile.education.length > 0
+    ) {
+      score += 20;
+    } else {
+      missing.push("Education History");
+    }
+  }
+
+  const percentage = totalPoints === 0 ? 0 : (score / totalPoints) * 100;
+
+  return {
+    percent: Math.round(percentage),
+    isReady: percentage === 100, // True if 100%, False if less
+    missingItems: missing,
+  };
+};
+
 const uri = `mongodb+srv://${process.env.DB_USER}:${process.env.DB_PASS}@cluster0.xc8a26e.mongodb.net/?appName=Cluster0`;
 
 const client = new MongoClient(uri, {
@@ -77,7 +178,7 @@ app.patch("/user", async (req, res) => {
     district,
     guardianRelation,
     guardianPhone,
-    address
+    address,
   } = req.body;
   if (photoURL) {
     const update = {
@@ -98,7 +199,7 @@ app.patch("/user", async (req, res) => {
         class: studentClass,
         division: division,
         district: district,
-        address:address,
+        address: address,
         guardian: {
           relation: guardianRelation,
           phone: guardianPhone,
