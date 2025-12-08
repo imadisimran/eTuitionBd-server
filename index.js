@@ -89,6 +89,7 @@ const client = new MongoClient(uri, {
 //Collections
 const db = client.db("eTuitionBD");
 const usersCollection = db.collection("users");
+const tuitionsCollection = db.collection("tuitions");
 
 app.get("/", (req, res) => {
   res.send({ message: "eTuitionBD backend is working" });
@@ -193,6 +194,61 @@ app.get("/user/role", async (req, res) => {
   });
   // console.log(role)
   res.send(roleInfo);
+});
+
+//Tuition
+
+app.post("/tuitions", async (req, res) => {
+  const { email } = req.query;
+  const query = {};
+  if (email) {
+    query.email = email;
+  } else {
+    res.status(404).send({ message: "Not found" });
+  }
+
+  const userData = await usersCollection.findOne(query);
+
+  const {
+    title,
+    subject,
+    medium,
+    salaryMin,
+    salaryMax,
+    teacherGender,
+    mode,
+    daysPerWeek,
+    description,
+  } = req.body;
+  const tuitionDetails = {
+    studentEmail: userData.email,
+    studentName: userData.displayName,
+    title: title,
+    subject: subject,
+    medium: medium,
+    salaryRange: {
+      min: Number(salaryMin),
+      max: Number(salaryMax),
+    },
+    teacherGender: teacherGender,
+    mode: mode,
+    daysPerWeek: Number(daysPerWeek),
+    description: description,
+    status: "pending",
+    location: {
+      district: userData.studentInfo.district,
+      division: userData.studentInfo.division,
+      address: userData.studentInfo.address,
+    },
+    class: userData.studentInfo.class,
+    createdAt: new Date(),
+  };
+
+  // console.log(tuitionDetails);
+
+  const result = await tuitionsCollection.insertOne(tuitionDetails);
+
+  res.send(result);
 });
 
 async function run() {
