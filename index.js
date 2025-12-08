@@ -120,13 +120,13 @@ app.post("/user", async (req, res) => {
 
 app.get("/user", async (req, res) => {
   const query = {};
-  const { email } = req.query;
+  const { email, role } = req.query;
   if (email) {
     query.email = email;
   }
   const user = await usersCollection.findOne(query);
   const profileStatus = checkProfile(user);
-  user.profileStatus=profileStatus
+  user.profileStatus = profileStatus;
   res.send(user);
 });
 
@@ -178,6 +178,21 @@ app.patch("/user", async (req, res) => {
 
   const updateRes = await usersCollection.updateOne(query, update);
   res.send(updateRes);
+});
+
+//get role
+
+app.get("/user/role", async (req, res) => {
+  const query = {};
+  const { email } = req.query;
+  if (email) {
+    query.email = email;
+  }
+  const roleInfo = await usersCollection.findOne(query, {
+    projection: { role: 1 },
+  });
+  // console.log(role)
+  res.send(roleInfo);
 });
 
 async function run() {
