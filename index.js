@@ -2,7 +2,7 @@ const express = require("express");
 const app = express();
 const cors = require("cors");
 require("dotenv").config();
-const { MongoClient, ServerApiVersion } = require("mongodb");
+const { MongoClient, ServerApiVersion, ObjectId } = require("mongodb");
 const port = process.env.PORT || 3000;
 
 //Middleware
@@ -261,10 +261,22 @@ app.get("/tuitions", async (req, res) => {
   }
   const cursor = tuitionsCollection
     .find(query)
-    .sort({ createdAt: -1 })
-    .project({ salaryRange: 1, subject: 1, createdAt: 1 });
+    .project({ salaryRange: 1, subject: 1, createdAt: 1 })
+    .sort({ createdAt: -1 });
   const tuitions = await cursor.toArray();
   res.send(tuitions);
+});
+
+app.delete("/tuition/:id", async (req, res) => {
+  const { id } = req.params;
+  const query = {};
+  if (id) {
+    query._id = new ObjectId(id);
+  } else {
+    return res.send({ message: "Id is missing" });
+  }
+  const result = await tuitionsCollection.deleteOne(query);
+  res.send(result);
 });
 
 async function run() {
