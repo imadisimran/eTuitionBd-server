@@ -253,6 +253,20 @@ app.post("/tuitions", async (req, res) => {
   res.send(result);
 });
 
+app.get("/tuitions", async (req, res) => {
+  const { email } = req.query;
+  const query = {};
+  if (email) {
+    query.studentEmail = email;
+  }
+  const cursor = tuitionsCollection
+    .find(query)
+    .sort({ createdAt: -1 })
+    .project({ salaryRange: 1, subject: 1, createdAt: 1 });
+  const tuitions = await cursor.toArray();
+  res.send(tuitions);
+});
+
 async function run() {
   try {
     // Connect the client to the server	(optional starting in v4.7)
