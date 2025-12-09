@@ -19,8 +19,8 @@ const checkProfile = (user) => {
       missingItems: ["User profile not found"],
     };
 
-  let score = 0;
-  let totalPoints = 0;
+  let score = 2;
+  let totalPoints = 2;
   let missing = [];
 
   // Helper function to keep code DRY (Don't Repeat Yourself)
@@ -115,7 +115,9 @@ app.post("/user", async (req, res) => {
     createdAt: new Date(),
     role: "student",
   };
+  // console.log(req.headers.authorization)
   const result = await usersCollection.insertOne(userData);
+  // console.log(result)
   res.send(result);
 });
 
