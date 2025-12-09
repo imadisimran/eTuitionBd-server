@@ -19,6 +19,14 @@ const checkProfile = (user) => {
       missingItems: ["User profile not found"],
     };
 
+  if (user.role === "admin") {
+    return {
+      percent: 100,
+      isReady: true,
+      missingItems: [],
+    };
+  }
+
   let score = 2;
   let totalPoints = 2;
   let missing = [];
@@ -128,8 +136,10 @@ app.get("/user", async (req, res) => {
     query.email = email;
   }
   const user = await usersCollection.findOne(query);
-  const profileStatus = checkProfile(user);
-  user.profileStatus = profileStatus;
+  if (user?.role !== "admin") {
+    const profileStatus = checkProfile(user);
+    user.profileStatus = profileStatus;
+  }
   res.send(user);
 });
 
@@ -261,10 +271,58 @@ app.get("/tuitions", async (req, res) => {
   }
   const cursor = tuitionsCollection
     .find(query)
-    .project({ salaryRange: 1, subject: 1, createdAt: 1 })
+    .project({ salaryRange: 1, subject: 1, createdAt: 1, status: 1 })
     .sort({ createdAt: -1 });
   const tuitions = await cursor.toArray();
   res.send(tuitions);
+});
+
+app.get("/tuitions/admin", async (req, res) => {
+  const { status } = req.query;
+  const query = {};
+  if (status) {
+    query.status = status;
+  }
+  const cursor = tuitionsCollection
+    .find(query)
+    .sort({ createdAt: -1 })
+    .project({ subject: 1, daysPerWeek: 1, salaryRange: 1, status: 1 });
+  const posts = await cursor.toArray();
+  res.send(posts);
+});
+
+app.get("/tuition/:id", async (req, res) => {
+  const { id } = req.params;
+  const query = {};
+  if (id) {
+    query._id = new ObjectId(id);
+  }
+  const tuitionDetails = await tuitionsCollection.findOne(query);
+  res.send(tuitionDetails);
+});
+
+app.patch("/tuition/admin/:id", async (req, res) => {
+  const { id } = req.params;
+  const { status } = req.query;
+  // console.log(status)
+  const query = {};
+  if (id.length !== 24) {
+    return res.status(400).send({ message: "Invalid Id" });
+  }
+
+  query._id = new ObjectId(id);
+  if (status !== "approved" && status !== "rejected") {
+    return res.status(400).send({ message: "Invalid Status" });
+  }
+
+  const update = {
+    $set: {
+      status: status,
+    },
+  };
+
+  const result = await tuitionsCollection.updateOne(query, update);
+  res.send(result);
 });
 
 app.delete("/tuition/:id", async (req, res) => {
