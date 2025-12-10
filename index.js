@@ -32,17 +32,17 @@ const verifyFBToken = async (req, res, next) => {
     req.decoded_email = decoded.email;
     next();
   } catch {
-    res.status(401).send({ message: "Unauthorized access" });
+    return res.status(401).send({ message: "Unauthorized access" });
   }
 };
 
 const verifyEmail = (req, res, next) => {
   const decoded_email = req.decoded_email;
   const request_email = req.query.email;
-  if (decoded_email === request_email) {
-    next();
+  if (decoded_email !== request_email) {
+    return res.status(403).send({ message: "Forbidden access" });
   }
-  return res.status(403).send({ message: "Forbidden access" });
+  next();
 };
 
 verifyAdmin = async (req, res, next) => {
@@ -68,14 +68,6 @@ const checkProfile = (user) => {
       missingItems: ["User profile not found"],
     };
 
-  if (user.role === "admin") {
-    return {
-      percent: 100,
-      isReady: true,
-      missingItems: [],
-    };
-  }
-
   let score = 2;
   let totalPoints = 2;
   let missing = [];
@@ -91,12 +83,28 @@ const checkProfile = (user) => {
     }
   };
 
-  // --- Check Root Info ---
   checkField(user.phone, "Phone Number");
 
-  // --- Check Student Info ---
-  if (user.role === "student") {
-    // fields with specific human-readable labels
+  // Tutor
+  if (user.role === "tutor") {
+    const tutorProfileChecks = [
+      { key: "institution", label: "Institution" },
+      { key: "qualification", label: "Qualification" },
+      { key: "experience", label: "Experience" },
+      { key: "gender", label: "Gender" },
+      { key: "bio", label: "Bio" },
+    ];
+
+    tutorProfileChecks.forEach((item) => {
+      const value = user?.tutorProfile?.[item.key];
+      checkField(value, item.label);
+    });
+
+    checkField(user?.tutorProfile?.subjects?.length, "Subjects");
+    checkField(user?.tutorProfile?.education?.length, "Education");
+  }
+  // Student
+  else if (user.role === "student") {
     const studentChecks = [
       { key: "class", label: "Class" },
       { key: "division", label: "Division" },
@@ -105,19 +113,16 @@ const checkProfile = (user) => {
     ];
 
     studentChecks.forEach((item) => {
-      // Use optional chaining (?.) to safely access nested data
       const value = user.studentInfo?.[item.key];
       checkField(value, item.label);
     });
 
-    // --- Check Guardian Info ---
     const guardianChecks = [
       { key: "relation", label: "Guardian Relation" },
       { key: "phone", label: "Guardian Phone Number" },
     ];
 
     guardianChecks.forEach((item) => {
-      // Safely access user -> studentInfo -> guardian -> key
       const value = user.studentInfo?.guardian?.[item.key];
       checkField(value, item.label);
     });
@@ -153,7 +158,7 @@ app.get("/", (req, res) => {
 });
 
 //User apis
-app.post("/user", verifyFBToken, async (req, res) => {
+app.post("/user", async (req, res) => {
   const data = req.body;
   // console.log(data)
   if (data?.email) {
@@ -170,8 +175,14 @@ app.post("/user", verifyFBToken, async (req, res) => {
     photoURL: data.photoURL,
     email: data.email,
     createdAt: new Date(),
-    role: "student",
   };
+
+  if (data?.role === "tutor" && data?.institution) {
+    userData.role = "tutor";
+  } else {
+    userData.role = "student";
+  }
+
   // console.log(req.headers.authorization)
   const result = await usersCollection.insertOne(userData);
   // console.log(result)
@@ -209,7 +220,11 @@ app.patch("/user", verifyFBToken, verifyEmail, async (req, res) => {
     guardianRelation,
     guardianPhone,
     address,
+    tutorProfile,
   } = req.body;
+
+  //updating profile picture
+
   if (photoURL) {
     const update = {
       $set: {
@@ -222,6 +237,40 @@ app.patch("/user", verifyFBToken, verifyEmail, async (req, res) => {
     const updateRes = await usersCollection.updateOne(query, update);
     return res.send(updateRes);
   }
+
+  //Updating tutors info
+
+  if (tutorProfile) {
+    const {
+      institution,
+      qualification,
+      experience,
+      gender,
+      bio,
+      subjects,
+      education,
+    } = tutorProfile;
+    const update = {
+      $set: {
+        phone: phone,
+        tutorProfile: {
+          institution: institution,
+          qualification: qualification,
+          experience: experience,
+          gender: gender,
+          bio: bio,
+          subjects: subjects,
+          education: education,
+        },
+      },
+    };
+
+    const updateRes = await usersCollection.updateOne(query, update);
+    return res.send(updateRes);
+  }
+
+  //Updating students info
+
   const update = {
     $set: {
       phone: phone,
@@ -338,7 +387,7 @@ app.get("/tuitions", async (req, res) => {
   res.send(tuitions);
 });
 
-app.get("/my-tuitions", async (req, res) => {
+app.get("/my-tuitions", verifyFBToken, verifyEmail, async (req, res) => {
   const query = {};
   const { email } = req.query;
   if (email) {
