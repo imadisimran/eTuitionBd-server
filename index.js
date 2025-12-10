@@ -381,6 +381,10 @@ app.get("/tuitions", async (req, res) => {
       createdAt: 1,
       status: 1,
       daysPerWeek: 1,
+      class: 1,
+      medium: 1,
+      location: 1,
+      title: 1,
     })
     .sort({ createdAt: -1 });
   const tuitions = await cursor.toArray();
