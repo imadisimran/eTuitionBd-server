@@ -3,11 +3,60 @@ const app = express();
 const cors = require("cors");
 require("dotenv").config();
 const { MongoClient, ServerApiVersion, ObjectId } = require("mongodb");
+const admin = require("firebase-admin");
+const serviceAccount = require("./firebase-admin-sdk.json");
 const port = process.env.PORT || 3000;
 
 //Middleware
 app.use(express.json());
 app.use(cors());
+
+admin.initializeApp({
+  credential: admin.credential.cert(serviceAccount),
+});
+
+const verifyFBToken = async (req, res, next) => {
+  const authorization = req.headers.authorization;
+  // console.log(authorization)
+  if (!authorization) {
+    return res.status(401).send({ message: "Unauthorized Access" });
+  }
+  const token = authorization.split(" ")[1];
+  if (!token) {
+    return res.status(401).send({ message: "Unauthorized Access" });
+  }
+  // console.log(token)
+  try {
+    const decoded = await admin.auth().verifyIdToken(token);
+    // console.log(decoded);
+    req.decoded_email = decoded.email;
+    next();
+  } catch {
+    res.status(401).send({ message: "Unauthorized access" });
+  }
+};
+
+const verifyEmail = (req, res, next) => {
+  const decoded_email = req.decoded_email;
+  const request_email = req.query.email;
+  if (decoded_email === request_email) {
+    next();
+  }
+  return res.status(403).send({ message: "Forbidden access" });
+};
+
+verifyAdmin = async (req, res, next) => {
+  const query = {};
+  query.email = req.decoded_email;
+  const userRole = await usersCollection.findOne(query, {
+    projection: { role: 1 },
+  });
+  if (userRole.role === "admin") {
+    next();
+  } else {
+    return res.status(403).send({ message: "Unauthorized access" });
+  }
+};
 
 //functions
 const checkProfile = (user) => {
@@ -104,7 +153,7 @@ app.get("/", (req, res) => {
 });
 
 //User apis
-app.post("/user", async (req, res) => {
+app.post("/user", verifyFBToken, async (req, res) => {
   const data = req.body;
   // console.log(data)
   if (data?.email) {
@@ -129,7 +178,7 @@ app.post("/user", async (req, res) => {
   res.send(result);
 });
 
-app.get("/user", async (req, res) => {
+app.get("/user", verifyFBToken, async (req, res) => {
   const query = {};
   const { email, role } = req.query;
   if (email) {
@@ -143,7 +192,7 @@ app.get("/user", async (req, res) => {
   res.send(user);
 });
 
-app.patch("/user", async (req, res) => {
+app.patch("/user", verifyFBToken, verifyEmail, async (req, res) => {
   const { email } = req.query;
   const query = {};
   if (email) {
@@ -195,7 +244,7 @@ app.patch("/user", async (req, res) => {
 
 //get role
 
-app.get("/user/role", async (req, res) => {
+app.get("/user/role", verifyFBToken, async (req, res) => {
   const query = {};
   const { email } = req.query;
   if (email) {
@@ -210,16 +259,22 @@ app.get("/user/role", async (req, res) => {
 
 //Tuition
 
-app.post("/tuitions", async (req, res) => {
+app.post("/tuitions", verifyFBToken, verifyEmail, async (req, res) => {
   const { email } = req.query;
   const query = {};
-  if (email) {
-    query.email = email;
-  } else {
-    res.status(404).send({ message: "Not found" });
-  }
+  query.email = email;
+  // if (email) {
+  //   query.email = email;
+  // } else {
+  //   res.status(404).send({ message: "Not found" });
+  // }
 
   const userData = await usersCollection.findOne(query);
+
+  const profileStatus = checkProfile(userData);
+  if (!profileStatus.isReady) {
+    return res.status(400).send({ message: "Profile is not completed" });
+  }
 
   const {
     title,
@@ -264,20 +319,46 @@ app.post("/tuitions", async (req, res) => {
 });
 
 app.get("/tuitions", async (req, res) => {
-  const { email } = req.query;
+  const { status } = req.query;
   const query = {};
-  if (email) {
-    query.studentEmail = email;
+  if (status !== "approved") {
+    query.status = "approved";
   }
   const cursor = tuitionsCollection
     .find(query)
-    .project({ salaryRange: 1, subject: 1, createdAt: 1, status: 1 })
+    .project({
+      salaryRange: 1,
+      subject: 1,
+      createdAt: 1,
+      status: 1,
+      daysPerWeek: 1,
+    })
     .sort({ createdAt: -1 });
   const tuitions = await cursor.toArray();
   res.send(tuitions);
 });
 
-app.get("/tuitions/admin", async (req, res) => {
+app.get("/my-tuitions", async (req, res) => {
+  const query = {};
+  const { email } = req.query;
+  if (email) {
+    query.email = email;
+  }
+  const cursor = tuitionsCollection
+    .find(query)
+    .project({
+      salaryRange: 1,
+      subject: 1,
+      createdAt: 1,
+      status: 1,
+      daysPerWeek: 1,
+    })
+    .sort({ createdAt: -1 });
+  const tuitions = await cursor.toArray();
+  res.send(tuitions);
+});
+
+app.get("/tuitions/admin", verifyFBToken, verifyAdmin, async (req, res) => {
   const { status } = req.query;
   const query = {};
   if (status) {
@@ -301,7 +382,7 @@ app.get("/tuition/:id", async (req, res) => {
   res.send(tuitionDetails);
 });
 
-app.patch("/tuition/admin/:id", async (req, res) => {
+app.patch("/tuition/admin/:id", verifyAdmin, async (req, res) => {
   const { id } = req.params;
   const { status } = req.query;
   // console.log(status)
@@ -325,7 +406,7 @@ app.patch("/tuition/admin/:id", async (req, res) => {
   res.send(result);
 });
 
-app.delete("/tuition/:id", async (req, res) => {
+app.delete("/tuition/:id", verifyFBToken, verifyEmail, async (req, res) => {
   const { id } = req.params;
   const query = {};
   if (id) {
