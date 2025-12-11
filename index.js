@@ -193,7 +193,10 @@ app.post("/user", async (req, res) => {
 
   if (data?.role === "tutor" && data?.institution) {
     userData.role = "tutor";
-    userData.tutorProfile.status = "pending";
+    userData.tutorProfile = {
+      institution: data.institution,
+      status: "pending",
+    };
   } else {
     userData.role = "student";
   }
