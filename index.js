@@ -503,6 +503,35 @@ app.get("/user/tutor", verifyFBToken, verifyAdmin, async (req, res) => {
   res.send(result);
 });
 
+app.get("/tutor/:id", async (req, res) => {
+  const { id } = req.params;
+  if (!ObjectId.isValid(id)) {
+    return res.status(400).send({ message: "Bad request" });
+  }
+  const query = { _id: new ObjectId(id) };
+  const tutor = await usersCollection.findOne(query);
+  res.send(tutor);
+});
+
+app.patch("/tutor/:id", verifyFBToken, verifyAdmin, async (req, res) => {
+  const { id } = req.params;
+  const { status } = req.body;
+  if (!ObjectId.isValid(id)) {
+    return res.status(400).send({ message: "Bad request" });
+  }
+  if (status !== "approved" && status !== "rejected") {
+    return res.status(400).send({ message: "Bad request" });
+  }
+  const filter = { _id: new ObjectId(id) };
+  const update = {
+    $set: {
+      "tutorProfile.status": status,
+    },
+  };
+  const result = await usersCollection.updateOne(filter, update);
+  res.send(result);
+});
+
 app.delete("/tuition/:id", verifyFBToken, async (req, res) => {
   const { id } = req.params;
   const query = {};
