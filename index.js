@@ -207,7 +207,7 @@ app.post("/user", async (req, res) => {
   res.send(result);
 });
 
-app.get("/user", verifyFBToken, async (req, res) => {
+app.get("/user", verifyFBToken, verifyEmail, async (req, res) => {
   const query = {};
   const { email } = req.query;
   if (email) {
@@ -385,13 +385,8 @@ app.post("/tuitions", verifyFBToken, verifyEmail, async (req, res) => {
 });
 
 app.get("/tuitions", async (req, res) => {
-  // const { status } = req.query;
   const query = {};
   query.status = "approved";
-  // if (status !== "approved") {
-  //   query.status = 'approved';
-  // }
-  // query.status
   const cursor = tuitionsCollection
     .find(query)
     .project({
@@ -463,7 +458,7 @@ app.patch(
     const { status } = req.query;
     // console.log(status)
     const query = {};
-    if (id.length !== 24) {
+    if (!ObjectId.isValid(id)) {
       return res.status(400).send({ message: "Invalid Id" });
     }
 
@@ -482,6 +477,31 @@ app.patch(
     res.send(result);
   }
 );
+
+app.get("/user/tutor", verifyFBToken, verifyAdmin, async (req, res) => {
+  const { status } = req.query;
+  const query = { role: "tutor" };
+  if (status === "pending") {
+    query["tutorProfile.status"] = { $in: ["pending", null] };
+  }
+
+  const cursor = usersCollection.find(query);
+  const tutors = await cursor.toArray();
+
+  const completedProfiles = tutors.filter((r) => checkProfile(r).isReady);
+  const result = completedProfiles.map((c) => {
+    return {
+      _id: c._id,
+      displayName: c.displayName,
+      tutorProfile: {
+        institution: c.tutorProfile.institution,
+        experience: c.tutorProfile.experience,
+        gender: c.tutorProfile.gender,
+      },
+    };
+  });
+  res.send(result);
+});
 
 app.delete("/tuition/:id", verifyFBToken, async (req, res) => {
   const { id } = req.params;
