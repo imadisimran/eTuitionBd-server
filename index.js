@@ -478,7 +478,7 @@ app.patch(
   }
 );
 
-app.get("/user/tutor", verifyFBToken, verifyAdmin, async (req, res) => {
+app.get("/admin/tutor", verifyFBToken, verifyAdmin, async (req, res) => {
   const { status } = req.query;
   const query = { role: "tutor" };
   if (status === "pending") {
@@ -553,6 +553,20 @@ app.delete("/tuition/:id", verifyFBToken, async (req, res) => {
     }
   }
   const result = await tuitionsCollection.deleteOne(query);
+  res.send(result);
+});
+
+app.get("/tutors", async (req, res) => {
+  const query = { "tutorProfile.status": "approved", role: "tutor" };
+  const cursor = usersCollection.find(query).limit(5).project({
+    displayName: 1,
+    photoURL: 1,
+    "tutorProfile.institution": 1,
+    "tutorProfile.experience": 1,
+    "tutorProfile.qualification": 1,
+  });
+
+  const result = await cursor.toArray();
   res.send(result);
 });
 
