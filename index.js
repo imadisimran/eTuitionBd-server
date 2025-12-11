@@ -58,7 +58,6 @@ verifyAdmin = async (req, res, next) => {
   }
 };
 
-
 verifyStudent = async (req, res, next) => {
   const query = {};
   query.email = req.decoded_email;
@@ -166,6 +165,7 @@ const client = new MongoClient(uri, {
 const db = client.db("eTuitionBD");
 const usersCollection = db.collection("users");
 const tuitionsCollection = db.collection("tuitions");
+const applicationsCollection = db.collection("applications");
 
 app.get("/", (req, res) => {
   res.send({ message: "eTuitionBD backend is working" });
@@ -193,6 +193,7 @@ app.post("/user", async (req, res) => {
 
   if (data?.role === "tutor" && data?.institution) {
     userData.role = "tutor";
+    userData.tutorProfile.status = "pending";
   } else {
     userData.role = "student";
   }
@@ -205,7 +206,7 @@ app.post("/user", async (req, res) => {
 
 app.get("/user", verifyFBToken, async (req, res) => {
   const query = {};
-  const { email, role } = req.query;
+  const { email } = req.query;
   if (email) {
     query.email = email;
   }
@@ -270,7 +271,7 @@ app.patch("/user", verifyFBToken, verifyEmail, async (req, res) => {
         tutorProfile: {
           institution: institution,
           qualification: qualification,
-          experience: experience,
+          experience: Number(experience),
           gender: gender,
           bio: bio,
           subjects: subjects,
@@ -500,6 +501,47 @@ app.delete("/tuition/:id", verifyFBToken, async (req, res) => {
     }
   }
   const result = await tuitionsCollection.deleteOne(query);
+  res.send(result);
+});
+
+//Application apis
+
+app.post("/application/:tuitionId", verifyFBToken, async (req, res) => {
+  const user = await usersCollection.findOne({ email: req.decoded_email });
+  if (user.role !== "tutor") {
+    return res.status(403).send({ message: "Forbidden Access" });
+  }
+  const { isReady } = checkProfile(user);
+  if (!isReady) {
+    return res.status(400).send({ message: "Bad request" });
+  }
+  const { tuitionId } = req.params;
+  const { expectedSalary, note } = req.body;
+
+  if (!ObjectId.isValid(tuitionId)) {
+    return res.status(400).send({ message: "Invalid Id" });
+  }
+
+  const { studentEmail } = await tuitionsCollection.findOne(
+    { _id: new ObjectId(tuitionId) },
+    { projection: { studentEmail: 1 } }
+  );
+  const applicationData = {
+    tuitionId: tuitionId,
+    studentEmail: studentEmail,
+    tutorEmail: req.decoded_email,
+    tutorName: user.displayName,
+    tutorImage: user.photoURL,
+    appliedAt: new Date(),
+    expectedSalary: expectedSalary,
+    note: note,
+    tutorInstitution: user.tutorProfile.institution,
+    experience: Number(user.tutorProfile.experience),
+    tutorGender: user.tutorProfile.gender,
+    status: "pending",
+  };
+  const result = await applicationsCollection.insertOne(applicationData);
+  // console.log(applicationData);
   res.send(result);
 });
 
