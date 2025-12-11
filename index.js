@@ -48,10 +48,24 @@ const verifyEmail = (req, res, next) => {
 verifyAdmin = async (req, res, next) => {
   const query = {};
   query.email = req.decoded_email;
-  const userRole = await usersCollection.findOne(query, {
+  const user = await usersCollection.findOne(query, {
     projection: { role: 1 },
   });
-  if (userRole.role === "admin") {
+  if (user?.role === "admin") {
+    next();
+  } else {
+    return res.status(403).send({ message: "Unauthorized access" });
+  }
+};
+
+
+verifyStudent = async (req, res, next) => {
+  const query = {};
+  query.email = req.decoded_email;
+  const user = await usersCollection.findOne(query, {
+    projection: { role: 1 },
+  });
+  if (user?.role === "student") {
     next();
   } else {
     return res.status(403).send({ message: "Unauthorized access" });
@@ -312,13 +326,12 @@ app.post("/tuitions", verifyFBToken, verifyEmail, async (req, res) => {
   const { email } = req.query;
   const query = {};
   query.email = email;
-  // if (email) {
-  //   query.email = email;
-  // } else {
-  //   res.status(404).send({ message: "Not found" });
-  // }
 
   const userData = await usersCollection.findOne(query);
+
+  if (userData.role !== "student") {
+    return res.status(400).send({ message: "only student can post" });
+  }
 
   const profileStatus = checkProfile(userData);
   if (!profileStatus.isReady) {
@@ -368,11 +381,13 @@ app.post("/tuitions", verifyFBToken, verifyEmail, async (req, res) => {
 });
 
 app.get("/tuitions", async (req, res) => {
-  const { status } = req.query;
+  // const { status } = req.query;
   const query = {};
-  if (status !== "approved") {
-    query.status = "approved";
-  }
+  query.status = "approved";
+  // if (status !== "approved") {
+  //   query.status = 'approved';
+  // }
+  // query.status
   const cursor = tuitionsCollection
     .find(query)
     .project({
@@ -395,7 +410,7 @@ app.get("/my-tuitions", verifyFBToken, verifyEmail, async (req, res) => {
   const query = {};
   const { email } = req.query;
   if (email) {
-    query.email = email;
+    query.studentEmail = email;
   }
   const cursor = tuitionsCollection
     .find(query)
@@ -435,37 +450,54 @@ app.get("/tuition/:id", async (req, res) => {
   res.send(tuitionDetails);
 });
 
-app.patch("/tuition/admin/:id", verifyAdmin, async (req, res) => {
-  const { id } = req.params;
-  const { status } = req.query;
-  // console.log(status)
-  const query = {};
-  if (id.length !== 24) {
-    return res.status(400).send({ message: "Invalid Id" });
-  }
+app.patch(
+  "/tuition/admin/:id",
+  verifyFBToken,
+  verifyAdmin,
+  async (req, res) => {
+    const { id } = req.params;
+    const { status } = req.query;
+    // console.log(status)
+    const query = {};
+    if (id.length !== 24) {
+      return res.status(400).send({ message: "Invalid Id" });
+    }
 
-  query._id = new ObjectId(id);
-  if (status !== "approved" && status !== "rejected") {
-    return res.status(400).send({ message: "Invalid Status" });
-  }
-
-  const update = {
-    $set: {
-      status: status,
-    },
-  };
-
-  const result = await tuitionsCollection.updateOne(query, update);
-  res.send(result);
-});
-
-app.delete("/tuition/:id", verifyFBToken, verifyEmail, async (req, res) => {
-  const { id } = req.params;
-  const query = {};
-  if (id) {
     query._id = new ObjectId(id);
-  } else {
-    return res.send({ message: "Id is missing" });
+    if (status !== "approved" && status !== "rejected") {
+      return res.status(400).send({ message: "Invalid Status" });
+    }
+
+    const update = {
+      $set: {
+        status: status,
+      },
+    };
+
+    const result = await tuitionsCollection.updateOne(query, update);
+    res.send(result);
+  }
+);
+
+app.delete("/tuition/:id", verifyFBToken, async (req, res) => {
+  const { id } = req.params;
+  const query = {};
+  if (!id) {
+    return res.status(400).send({ message: "Id is missing" });
+  }
+  query._id = new ObjectId(id);
+
+  const tuitionPost = await tuitionsCollection.findOne(query, {
+    projection: { studentEmail: 1 },
+  });
+  if (tuitionPost?.studentEmail !== req.decoded_email) {
+    const user = await usersCollection.findOne(
+      { email: req.decoded_email },
+      { projection: { role: 1 } }
+    );
+    if (user?.role !== "admin") {
+      return res.status(403).send({ message: "Forbidden access" });
+    }
   }
   const result = await tuitionsCollection.deleteOne(query);
   res.send(result);
