@@ -71,6 +71,19 @@ verifyStudent = async (req, res, next) => {
   }
 };
 
+const verifyTutor = async (req, res, next) => {
+  const query = {};
+  query.email = req.decoded_email;
+  const user = await usersCollection.findOne(query, {
+    projection: { role: 1 },
+  });
+  if (user?.role === "tutor") {
+    next();
+  } else {
+    return res.status(403).send({ message: "Unauthorized access" });
+  }
+};
+
 //functions
 const checkProfile = (user) => {
   // 1. Safety Check: Return immediately if no user provided
@@ -400,7 +413,8 @@ app.get("/tuitions", async (req, res) => {
       location: 1,
       title: 1,
     })
-    .sort({ createdAt: -1 });
+    .sort({ createdAt: -1 })
+    .limit(5);
   const tuitions = await cursor.toArray();
   res.send(tuitions);
 });
@@ -594,6 +608,7 @@ app.post("/application/:tuitionId", verifyFBToken, async (req, res) => {
   );
   const applicationData = {
     tuitionId: tuitionId,
+    tutorId: user._id,
     studentEmail: studentEmail,
     tutorEmail: req.decoded_email,
     tutorName: user.displayName,
@@ -610,6 +625,22 @@ app.post("/application/:tuitionId", verifyFBToken, async (req, res) => {
   // console.log(applicationData);
   res.send(result);
 });
+
+app.get(
+  "/application/check",
+  verifyFBToken,
+  verifyEmail,
+  verifyTutor,
+  async (req, res) => {
+    const { tuitionId, email } = req.query;
+
+    const query = { tuitionId: tuitionId, tutorEmail: email };
+    const result = await applicationsCollection.findOne(query, {
+      projection: { _id: 1 },
+    });
+    res.send(result);
+  }
+);
 
 async function run() {
   try {
