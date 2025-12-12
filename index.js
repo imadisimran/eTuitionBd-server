@@ -501,6 +501,8 @@ app.patch("/tuition/:id", verifyFBToken, async (req, res) => {
 
     const data = req.body;
 
+    // console.log(data);
+
     const update = {
       $set: {
         title: data.title,
@@ -508,8 +510,8 @@ app.patch("/tuition/:id", verifyFBToken, async (req, res) => {
         class: data.class,
         medium: data.medium,
         salaryRange: {
-          min: Number(data.salaryMin),
-          max: Number(data.salaryMax),
+          min: Number(data.salaryRange.min),
+          max: Number(data.salaryRange.max),
         },
         teacherGender: data.teacherGender,
         mode: data.mode,
