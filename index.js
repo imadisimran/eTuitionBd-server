@@ -596,7 +596,7 @@ app.post("/application/:tuitionId", verifyFBToken, async (req, res) => {
     return res.status(400).send({ message: "Bad request" });
   }
   const { tuitionId } = req.params;
-  const { expectedSalary, note } = req.body;
+  const { expectedSalary, note, tuitionTitle } = req.body;
 
   if (!ObjectId.isValid(tuitionId)) {
     return res.status(400).send({ message: "Invalid Id" });
@@ -608,13 +608,14 @@ app.post("/application/:tuitionId", verifyFBToken, async (req, res) => {
   );
   const applicationData = {
     tuitionId: tuitionId,
+    tuitionTitle: tuitionTitle,
     tutorId: user._id,
     studentEmail: studentEmail,
     tutorEmail: req.decoded_email,
     tutorName: user.displayName,
     tutorImage: user.photoURL,
     appliedAt: new Date(),
-    expectedSalary: expectedSalary,
+    expectedSalary: Number(expectedSalary),
     note: note,
     tutorInstitution: user.tutorProfile.institution,
     experience: Number(user.tutorProfile.experience),
@@ -624,6 +625,17 @@ app.post("/application/:tuitionId", verifyFBToken, async (req, res) => {
   const result = await applicationsCollection.insertOne(applicationData);
   // console.log(applicationData);
   res.send(result);
+});
+
+app.get("/applications", verifyFBToken, async (req, res) => {
+  const { email } = req.query;
+  const query = { tutorEmail: email };
+  const cursor = applicationsCollection
+    .find(query)
+    .sort({ appliedAt: -1 })
+    .project({ expectedSalary: 1, tuitionTitle: 1, note: 1, tuitionId: 1 });
+  const applications = await cursor.toArray();
+  res.send(applications);
 });
 
 app.get(
@@ -639,6 +651,49 @@ app.get(
       projection: { _id: 1 },
     });
     res.send(result);
+  }
+);
+
+app.get("/application/:applicationId", verifyFBToken, async (req, res) => {
+  const { applicationId } = req.params;
+  if (!ObjectId.isValid(applicationId)) {
+    return res.status(400).send({ message: "Bad request" });
+  }
+  const query = { _id: new ObjectId(applicationId) };
+  const application = await applicationsCollection.findOne(query, {
+    projection: { expectedSalary: 1, tuitionTitle: 1, note: 1 },
+  });
+  res.send(application);
+});
+
+app.patch(
+  "/application/:applicationId",
+  verifyFBToken,
+  verifyTutor,
+  async (req, res) => {
+    const { applicationId } = req.params;
+    const { expectedSalary, note } = req.body;
+    const query = { _id: new ObjectId(applicationId) };
+    const update = {
+      $set: {
+        expectedSalary: expectedSalary,
+        note: note,
+      },
+    };
+    const updateRes = await applicationsCollection.updateOne(query, update);
+    res.send(updateRes);
+  }
+);
+
+app.delete(
+  "/application/:applicationId",
+  verifyFBToken,
+  verifyTutor,
+  async (req, res) => {
+    const { applicationId } = req.params;
+    const query = { _id: new ObjectId(applicationId) };
+    const deleteRes = await applicationsCollection.deleteOne(query);
+    res.send(deleteRes);
   }
 );
 
