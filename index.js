@@ -701,7 +701,13 @@ app.get("/applications", verifyFBToken, async (req, res) => {
   const cursor = applicationsCollection
     .find(query)
     .sort({ appliedAt: -1 })
-    .project({ expectedSalary: 1, tuitionTitle: 1, note: 1, tuitionId: 1 });
+    .project({
+      expectedSalary: 1,
+      tuitionTitle: 1,
+      note: 1,
+      tuitionId: 1,
+      tutorId: 1,
+    });
   const applications = await cursor.toArray();
   res.send(applications);
 });
@@ -729,7 +735,7 @@ app.get("/application/:applicationId", verifyFBToken, async (req, res) => {
   }
   const query = { _id: new ObjectId(applicationId) };
   const application = await applicationsCollection.findOne(query, {
-    projection: { expectedSalary: 1, tuitionTitle: 1, note: 1 },
+    projection: { expectedSalary: 1, tuitionTitle: 1, note: 1, tutorId: 1 },
   });
   res.send(application);
 });
@@ -764,6 +770,26 @@ app.delete(
     res.send(deleteRes);
   }
 );
+
+app.get("/applications/tuition/:tuitionId", verifyFBToken, async (req, res) => {
+  const { tuitionId } = req.params;
+  const query = { tuitionId: tuitionId };
+  const cursor = applicationsCollection
+    .find(query)
+    .project({
+      tutorImage: 1,
+      tutorName: 1,
+      tutorInstitution: 1,
+      expectedSalary: 1,
+      experience: 1,
+      note: 1,
+      tutorId: 1,
+      tuitionTitle:1
+    });
+
+    const applications = await cursor.toArray()
+    res.send(applications)
+});
 
 async function run() {
   try {
