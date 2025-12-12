@@ -463,6 +463,72 @@ app.get("/tuition/:id", async (req, res) => {
   res.send(tuitionDetails);
 });
 
+//This is the best practice should be followed in all the apis
+
+app.patch("/tuition/:id", verifyFBToken, async (req, res) => {
+  try {
+    const { id } = req.params;
+
+    if (!ObjectId.isValid(id)) {
+      return res.status(400).send({ message: "Invalid Id" });
+    }
+
+    const user = await usersCollection.findOne(
+      { email: req.decoded_email },
+      { projection: { role: 1 } }
+    );
+
+    if (!user) {
+      return res.status(401).send({ message: "User not found" });
+    }
+
+    if (user.role !== "admin" && user.role !== "student") {
+      return res.status(403).send({ message: "Forbidden access" });
+    }
+
+    const query = { _id: new ObjectId(id) };
+    const tuition = await tuitionsCollection.findOne(query, {
+      projection: { studentEmail: 1 },
+    });
+
+    if (!tuition) {
+      return res.status(404).send({ message: "Tuition not found" });
+    }
+
+    if (user.role !== "admin" && tuition.studentEmail !== req.decoded_email) {
+      return res.status(403).send({ message: "Forbidden Access" });
+    }
+
+    const data = req.body;
+
+    const update = {
+      $set: {
+        title: data.title,
+        subject: data.subject,
+        class: data.class,
+        medium: data.medium,
+        salaryRange: {
+          min: Number(data.salaryMin),
+          max: Number(data.salaryMax),
+        },
+        teacherGender: data.teacherGender,
+        mode: data.mode,
+        daysPerWeek: Number(data.daysPerWeek),
+        description: data.description,
+      },
+    };
+
+    // console.log(update);
+
+    const result = await tuitionsCollection.updateOne(query, update);
+    // console.log(result);
+    res.send(result);
+  } catch (error) {
+    console.error("Error in patch tuition:", error);
+    res.status(500).send({ message: "Internal Server Error" });
+  }
+});
+
 app.patch(
   "/tuition/admin/:id",
   verifyFBToken,
