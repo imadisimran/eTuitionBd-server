@@ -180,6 +180,7 @@ const db = client.db("eTuitionBD");
 const usersCollection = db.collection("users");
 const tuitionsCollection = db.collection("tuitions");
 const applicationsCollection = db.collection("applications");
+const paymentsCollection = db.collection("payments");
 
 app.get("/", (req, res) => {
   res.send({ message: "eTuitionBD backend is working" });
@@ -678,7 +679,7 @@ app.post("/application/:tuitionId", verifyFBToken, async (req, res) => {
   const applicationData = {
     tuitionId: tuitionId,
     tuitionTitle: tuitionTitle,
-    tutorId: user._id,
+    tutorId: user._id.toString(),
     studentEmail: studentEmail,
     tutorEmail: req.decoded_email,
     tutorName: user.displayName,
@@ -817,12 +818,62 @@ app.post("/create-checkout-session", verifyFBToken, async (req, res) => {
         quantity: 1,
       },
     ],
+    metadata: {
+      applicationId: applicationData._id.toString(),
+      tuitionId: applicationData.tuitionId,
+      studentEmail: applicationData.studentEmail,
+      tutorEmail: applicationData.tutorEmail,
+    },
     customer_email: req.decoded_email,
     mode: "payment",
     success_url: `${process.env.SITE_DOMAIN}/dashboard/payment-success?success=true&session_id={CHECKOUT_SESSION_ID}`,
     cancel_url: `${process.env.SITE_DOMAIN}/dashboard/payment-cancel`,
   });
   res.send({ url: session.url });
+});
+
+app.patch("/payment-success", verifyFBToken, async (req, res) => {
+  const { session_id } = req.body;
+  if (!session_id) {
+    return res.status(400).send({ message: "Bad request" });
+  }
+  const session = await stripe.checkout.sessions.retrieve(session_id);
+  if (session.payment_status !== "paid") {
+    return res.status(400).send({ message: "Payment failed" });
+  }
+
+  const isExist = await paymentsCollection.findOne({
+    transactionId: session.payment_intent,
+  });
+  if (isExist) {
+    return res.send({ ...isExist, message: "Already Exist" });
+  }
+
+  const updateTuition = await tuitionsCollection.updateOne(
+    { _id: new ObjectId(session.metadata.tuitionId) },
+    { $set: { status: "booked" } }
+  );
+
+  const updateRemainingApplication = await applicationsCollection.updateMany(
+    { tuitionId: session.metadata.tuitionId },
+    { $set: { status: "rejected" } }
+  );
+
+  const updateApplication = await applicationsCollection.updateOne(
+    { _id: new ObjectId(session.metadata.applicationId) },
+    { $set: { status: "accepted" } }
+  );
+
+  const paymentData = {
+    transactionId: session.payment_intent,
+    ...session.metadata,
+    amount: session.amount_total / 100,
+    paidAt: session.created,
+  };
+
+  const payment = await paymentsCollection.insertOne(paymentData);
+  res.send({ ...payment, transactionId: session.payment_intent });
+  // console.log(session)
 });
 
 async function run() {
