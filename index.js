@@ -6,6 +6,7 @@ const { MongoClient, ServerApiVersion, ObjectId } = require("mongodb");
 const admin = require("firebase-admin");
 const serviceAccount = require("./firebase-admin-sdk.json");
 const port = process.env.PORT || 3000;
+const stripe = require("stripe")(process.env.STRIPE_API_KEY);
 
 //Middleware
 app.use(express.json());
@@ -774,21 +775,54 @@ app.delete(
 app.get("/applications/tuition/:tuitionId", verifyFBToken, async (req, res) => {
   const { tuitionId } = req.params;
   const query = { tuitionId: tuitionId };
-  const cursor = applicationsCollection
-    .find(query)
-    .project({
-      tutorImage: 1,
-      tutorName: 1,
-      tutorInstitution: 1,
-      expectedSalary: 1,
-      experience: 1,
-      note: 1,
-      tutorId: 1,
-      tuitionTitle:1
-    });
+  const cursor = applicationsCollection.find(query).project({
+    tutorImage: 1,
+    tutorName: 1,
+    tutorInstitution: 1,
+    expectedSalary: 1,
+    experience: 1,
+    note: 1,
+    tutorId: 1,
+    tuitionTitle: 1,
+  });
 
-    const applications = await cursor.toArray()
-    res.send(applications)
+  const applications = await cursor.toArray();
+  res.send(applications);
+});
+
+//Payment system
+
+app.post("/create-checkout-session", verifyFBToken, async (req, res) => {
+  const { applicationId } = req.body;
+  if (!ObjectId.isValid(applicationId)) {
+    return res.status(400).send({ message: "Invalid Id" });
+  }
+  const applicationData = await applicationsCollection.findOne({
+    _id: new ObjectId(applicationId),
+  });
+  if (!applicationData) {
+    return res.status(400).send({ message: "Invalid Id" });
+  }
+  const session = await stripe.checkout.sessions.create({
+    line_items: [
+      {
+        price_data: {
+          currency: "bdt",
+          product_data: {
+            name: applicationData.tuitionTitle,
+            description: `You are going to pay ${applicationData.expectedSalary} BDT to ${applicationData.tutorName} for ${applicationData.tuitionTitle}`,
+          },
+          unit_amount: Number(applicationData.expectedSalary) * 100,
+        },
+        quantity: 1,
+      },
+    ],
+    customer_email: req.decoded_email,
+    mode: "payment",
+    success_url: `${process.env.SITE_DOMAIN}/dashboard/payment-success?success=true&session_id={CHECKOUT_SESSION_ID}`,
+    cancel_url: `${process.env.SITE_DOMAIN}/dashboard/payment-cancel`,
+  });
+  res.send({ url: session.url });
 });
 
 async function run() {
