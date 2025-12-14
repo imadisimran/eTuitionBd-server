@@ -403,8 +403,15 @@ app.get("/tuitions", async (req, res) => {
   const query = {};
   query.status = "approved";
   // console.log(req.query)
-  const { searchTxt, sortBy, studentClass, division, district, subject } =
-    req.query;
+  const {
+    searchTxt,
+    sortBy,
+    studentClass,
+    division,
+    district,
+    subject,
+    pageNo = 1,
+  } = req.query;
 
   if (searchTxt) {
     query.$or = [
@@ -429,6 +436,8 @@ app.get("/tuitions", async (req, res) => {
     query.subject = subject;
   }
 
+  const skip = (pageNo - 1) * 6;
+
   // console.log(query);
   const cursor = tuitionsCollection
     .find(query)
@@ -445,9 +454,13 @@ app.get("/tuitions", async (req, res) => {
     })
     .sort(
       sortBy === "post_date" ? { createdAt: -1 } : { "salaryRange.max": -1 }
-    );
+    )
+    .skip(skip)
+    .limit(6);
+  const totalTuitions = await tuitionsCollection.countDocuments(query);
+  // console.log(totalTuitions)
   const tuitions = await cursor.toArray();
-  res.send(tuitions);
+  res.send({ tuitions, totalTuitions });
 });
 
 app.get("/my-tuitions", verifyFBToken, verifyEmail, async (req, res) => {
