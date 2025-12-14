@@ -942,9 +942,54 @@ app.get("/payments", verifyFBToken, async (req, res) => {
   }
   const payments = await paymentsCollection
     .find(query)
-    .project({ transactionId: 1, amount: 1, paidAt: 1 })
+    .project({
+      transactionId: 1,
+      amount: 1,
+      paidAt: 1,
+      tutorEmail: 1,
+      studentEmail: 1,
+    })
     .toArray();
   res.send(payments);
+});
+
+app.get("/admin-dashboard", verifyFBToken, verifyAdmin, async (req, res) => {
+  const tuitionStats = await tuitionsCollection
+    .aggregate([
+      {
+        $group: {
+          _id: "$status",
+          count: { $sum: 1 },
+        },
+      },
+      {
+        $project: {
+          _id: 0,
+          name: "$_id",
+          value: "$count",
+        },
+      },
+    ])
+    .toArray();
+
+  const totalTransaction = await paymentsCollection
+    .aggregate([
+      {
+        $group: {
+          _id: null,
+          total: { $sum: "$amount" },
+        },
+      },
+      {
+        $project: {
+          _id: 0,
+          // totalAmount:"$total"
+        },
+      },
+    ])
+    .toArray();
+
+  res.send({ tuitionStats, totalTransaction });
 });
 
 async function run() {
