@@ -423,7 +423,12 @@ app.get("/tuitions", async (req, res) => {
 
 app.get("/my-tuitions", verifyFBToken, verifyEmail, async (req, res) => {
   const query = {};
-  const { email } = req.query;
+  const { email, status } = req.query;
+  if (status) {
+    query.status = status;
+  } else {
+    query.status = { $nin: ["booked"] };
+  }
   if (email) {
     query.studentEmail = email;
   }
@@ -435,6 +440,7 @@ app.get("/my-tuitions", verifyFBToken, verifyEmail, async (req, res) => {
       createdAt: 1,
       status: 1,
       daysPerWeek: 1,
+      paidAt: 1,
     })
     .sort({ createdAt: -1 });
   const tuitions = await cursor.toArray();
@@ -698,8 +704,13 @@ app.post("/application/:tuitionId", verifyFBToken, async (req, res) => {
 });
 
 app.get("/applications", verifyFBToken, async (req, res) => {
-  const { email } = req.query;
+  const { email, status } = req.query;
   const query = { tutorEmail: email };
+  if (status) {
+    query.status = status;
+  } else {
+    query.status = { $nin: ["accepted"] };
+  }
   const cursor = applicationsCollection
     .find(query)
     .sort({ appliedAt: -1 })
@@ -851,7 +862,7 @@ app.patch("/payment-success", verifyFBToken, async (req, res) => {
 
   const updateTuition = await tuitionsCollection.updateOne(
     { _id: new ObjectId(session.metadata.tuitionId) },
-    { $set: { status: "booked" } }
+    { $set: { status: "booked", paidAt: session.created } }
   );
 
   const updateRemainingApplication = await applicationsCollection.updateMany(
@@ -874,6 +885,24 @@ app.patch("/payment-success", verifyFBToken, async (req, res) => {
   const payment = await paymentsCollection.insertOne(paymentData);
   res.send({ ...payment, transactionId: session.payment_intent });
   // console.log(session)
+});
+
+app.get("/payments", verifyFBToken, async (req, res) => {
+  const userData = await usersCollection.findOne(
+    { email: req.decoded_email },
+    { projection: { role: 1 } }
+  );
+  const query = {};
+  if (userData.role === "tutor") {
+    query.tutorEmail = req.decoded_email;
+  } else if (userData.role === "student") {
+    query.studentEmail = req.decoded_email;
+  }
+  const payments = await paymentsCollection
+    .find(query)
+    .project({ transactionId: 1, amount: 1, paidAt: 1 })
+    .toArray();
+  res.send(payments);
 });
 
 async function run() {
