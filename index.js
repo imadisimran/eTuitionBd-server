@@ -402,6 +402,34 @@ app.post("/tuitions", verifyFBToken, verifyEmail, async (req, res) => {
 app.get("/tuitions", async (req, res) => {
   const query = {};
   query.status = "approved";
+  // console.log(req.query)
+  const { searchTxt, sortBy, studentClass, division, district, subject } =
+    req.query;
+
+  if (searchTxt) {
+    query.$or = [
+      { title: { $regex: searchTxt, $options: "i" } },
+      { "location.address": { $regex: searchTxt, $options: "i" } },
+    ];
+  }
+
+  if (studentClass) {
+    query.class = studentClass;
+  }
+
+  if (division) {
+    query["location.division"] = division;
+  }
+
+  if (district) {
+    query["location.district"] = district;
+  }
+
+  if (subject) {
+    query.subject = subject;
+  }
+
+  // console.log(query);
   const cursor = tuitionsCollection
     .find(query)
     .project({
@@ -415,8 +443,9 @@ app.get("/tuitions", async (req, res) => {
       location: 1,
       title: 1,
     })
-    .sort({ createdAt: -1 })
-    .limit(5);
+    .sort(
+      sortBy === "post_date" ? { createdAt: -1 } : { "salaryRange.max": -1 }
+    );
   const tuitions = await cursor.toArray();
   res.send(tuitions);
 });
@@ -865,12 +894,12 @@ app.patch("/payment-success", verifyFBToken, async (req, res) => {
     { $set: { status: "booked", paidAt: session.created } }
   );
 
-  const updateRemainingApplication = await applicationsCollection.updateMany(
+  await applicationsCollection.updateMany(
     { tuitionId: session.metadata.tuitionId },
     { $set: { status: "rejected" } }
   );
 
-  const updateApplication = await applicationsCollection.updateOne(
+  await applicationsCollection.updateOne(
     { _id: new ObjectId(session.metadata.applicationId) },
     { $set: { status: "accepted" } }
   );
