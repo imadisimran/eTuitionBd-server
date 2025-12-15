@@ -222,13 +222,29 @@ app.post("/user", async (req, res) => {
   res.send(result);
 });
 
-app.get("/user", verifyFBToken, verifyEmail, async (req, res) => {
+app.get("/user", verifyFBToken, async (req, res) => {
   const query = {};
   const { email } = req.query;
   if (email) {
     query.email = email;
+  } else {
+    return res.status(400).send({ message: "User Not found" });
   }
+
+  if (req.decoded_email !== email) {
+    const decodedUser = await usersCollection.findOne(
+      { email: req.decoded_email },
+      { projection: { role: 1 } }
+    );
+    if (decodedUser.role !== "admin") {
+      return res.status(403).send({ message: "Forbidden Access" });
+    }
+  }
+
   const user = await usersCollection.findOne(query);
+  if (!user) {
+    return res.status(404).send({ message: "User not found" });
+  }
   if (user?.role !== "admin") {
     const profileStatus = checkProfile(user);
     user.profileStatus = profileStatus;
@@ -236,95 +252,105 @@ app.get("/user", verifyFBToken, verifyEmail, async (req, res) => {
   res.send(user);
 });
 
-app.patch("/user", verifyFBToken, verifyEmail, async (req, res) => {
+app.patch("/user", verifyFBToken, async (req, res) => {
   const { email } = req.query;
-  const query = {};
-  if (email) {
-    query.email = email;
+  const requesterEmail = req.decoded_email;
+
+  if (!email) {
+    return res.status(400).send({ message: "User not found (Email required)" });
   }
-  const {
-    photoURL,
-    deleteURL,
-    icon,
-    phone,
-    studentClass,
-    division,
-    district,
-    guardianRelation,
-    guardianPhone,
-    address,
-    tutorProfile,
-  } = req.body;
 
-  //updating profile picture
+  if (requesterEmail !== email) {
+    const requester = await usersCollection.findOne(
+      { email: requesterEmail },
+      { projection: { role: 1 } }
+    );
 
-  if (photoURL) {
-    const update = {
-      $set: {
-        photoURL: photoURL,
-        icon: icon,
-        deleteURL: deleteURL,
+    if (!requester || requester.role !== "admin") {
+      return res.status(403).send({ message: "Forbidden Access" });
+    }
+  }
+
+  const updateFields = {};
+  const data = req.body;
+
+  if (data.photoURL) {
+    updateFields.photoURL = data.photoURL;
+    updateFields.icon = data.icon;
+    updateFields.deleteURL = data.deleteURL;
+  }
+
+  if (data.tutorProfile) {
+    updateFields.phone = data.phone;
+
+    updateFields.tutorProfile = {
+      institution: data.tutorProfile.institution,
+      qualification: data.tutorProfile.qualification,
+      experience: Number(data.tutorProfile.experience),
+      gender: data.tutorProfile.gender,
+      bio: data.tutorProfile.bio,
+      subjects: data.tutorProfile.subjects,
+      education: data.tutorProfile.education,
+    };
+  }
+
+  if (data.studentClass || data.division) {
+    updateFields.phone = data.phone;
+    updateFields.studentInfo = {
+      class: data.studentClass,
+      division: data.division,
+      district: data.district,
+      address: data.address,
+      guardian: {
+        relation: data.guardianRelation,
+        phone: data.guardianPhone,
       },
     };
-
-    const updateRes = await usersCollection.updateOne(query, update);
-    return res.send(updateRes);
   }
 
-  //Updating tutors info
-
-  if (tutorProfile) {
-    const {
-      institution,
-      qualification,
-      experience,
-      gender,
-      bio,
-      subjects,
-      education,
-    } = tutorProfile;
-    const update = {
-      $set: {
-        phone: phone,
-        tutorProfile: {
-          institution: institution,
-          qualification: qualification,
-          experience: Number(experience),
-          gender: gender,
-          bio: bio,
-          subjects: subjects,
-          education: education,
-        },
-      },
-    };
-
-    const updateRes = await usersCollection.updateOne(query, update);
-    return res.send(updateRes);
+  if (Object.keys(updateFields).length === 0) {
+    return res
+      .status(400)
+      .send({ message: "No valid fields provided for update" });
   }
 
-  //Updating students info
-
-  const update = {
-    $set: {
-      phone: phone,
-      studentInfo: {
-        class: studentClass,
-        division: division,
-        district: district,
-        address: address,
-        guardian: {
-          relation: guardianRelation,
-          phone: guardianPhone,
-        },
-      },
-    },
-  };
-
-  const updateRes = await usersCollection.updateOne(query, update);
-  res.send(updateRes);
+  try {
+    const updateRes = await usersCollection.updateOne(
+      { email: email },
+      { $set: updateFields }
+    );
+    res.send(updateRes);
+  } catch (error) {
+    res.status(500).send({ message: "Failed to update user", error });
+  }
 });
 
-//get role
+app.get("/users", verifyFBToken, verifyAdmin, async (req, res) => {
+  const cursor = usersCollection.find();
+  const users = await cursor.toArray();
+  users.forEach((user) => {
+    if (user?.role !== "admin") {
+      const profileStatus = checkProfile(user);
+      user.profileStatus = {
+        percent: profileStatus.percent,
+        isReady: profileStatus.isReady,
+      };
+    }
+  });
+  const result = users.map((user) => {
+    return {
+      displayName: user?.displayName,
+      email: user?.email,
+      role: user?.role,
+      createdAt: user?.createdAt,
+      photoURL: user?.photoURL,
+      percent: user?.profileStatus?.percent,
+      _id:user._id
+    };
+  });
+  // console.log(users);
+  res.send(result);
+});
 
 app.get("/user/role", verifyFBToken, async (req, res) => {
   const query = {};
@@ -762,6 +788,7 @@ app.get("/applications", verifyFBToken, async (req, res) => {
       note: 1,
       tuitionId: 1,
       tutorId: 1,
+      status: 1,
     });
   const applications = await cursor.toArray();
   res.send(applications);
