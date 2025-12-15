@@ -1035,6 +1035,19 @@ app.delete("/delete-user", verifyFBToken, verifyAdmin, async (req, res) => {
   }
 });
 
+app.patch("/user/role", verifyFBToken, verifyAdmin, async (req, res) => {
+  const { role } = req.body;
+  const { email } = req.query;
+  if (!email || !role) {
+    return res.status(400).send({ message: "Bad request" });
+  }
+  const changeRole = await usersCollection.updateOne(
+    { email: email },
+    { $set: { role: role } }
+  );
+  res.send(changeRole);
+});
+
 async function run() {
   try {
     // Connect the client to the server	(optional starting in v4.7)
