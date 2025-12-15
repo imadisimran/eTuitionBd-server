@@ -345,7 +345,7 @@ app.get("/users", verifyFBToken, verifyAdmin, async (req, res) => {
       createdAt: user?.createdAt,
       photoURL: user?.photoURL,
       percent: user?.profileStatus?.percent,
-      _id:user._id
+      _id: user._id,
     };
   });
   // console.log(users);
@@ -1017,6 +1017,22 @@ app.get("/admin-dashboard", verifyFBToken, verifyAdmin, async (req, res) => {
     .toArray();
 
   res.send({ tuitionStats, totalTransaction });
+});
+
+app.delete("/delete-user", verifyFBToken, verifyAdmin, async (req, res) => {
+  const { email } = req.query;
+  if (!email) {
+    return res.status(400).send({ message: "Bad request" });
+  }
+  try {
+    const userRecord = await admin.auth().getUserByEmail(email);
+    const firebaseAccount = await admin.auth().deleteUser(userRecord.uid);
+    const dbAccount = await usersCollection.deleteOne({ email: email });
+    res.send({ firebaseAccount, dbAccount });
+  } catch (error) {
+    console.log("Delete User Error", error);
+    res.status(500).send({ message: "Error" });
+  }
 });
 
 async function run() {
