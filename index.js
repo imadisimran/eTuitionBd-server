@@ -365,6 +365,18 @@ app.get("/user/role", verifyFBToken, async (req, res) => {
   res.send(roleInfo);
 });
 
+app.patch("/user-tutor", verifyFBToken, verifyEmail, async (req, res) => {
+  const { email } = req.query;
+  if (!email) {
+    return res.status(400).send({ message: "Bad request" });
+  }
+  const query = { email: email };
+  const updateRes = await usersCollection.updateOne(query, {
+    $set: { role: "tutor" },
+  });
+  res.send(updateRes);
+});
+
 //Tuition
 
 app.post("/tuitions", verifyFBToken, verifyEmail, async (req, res) => {
@@ -933,7 +945,7 @@ app.patch("/payment-success", verifyFBToken, async (req, res) => {
     return res.send({ ...isExist, message: "Already Exist" });
   }
 
-  const updateTuition = await tuitionsCollection.updateOne(
+  await tuitionsCollection.updateOne(
     { _id: new ObjectId(session.metadata.tuitionId) },
     { $set: { status: "booked", paidAt: session.created } }
   );
