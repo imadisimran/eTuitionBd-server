@@ -716,13 +716,17 @@ app.delete("/tuition/:id", verifyFBToken, async (req, res) => {
 
 app.get("/tutors", async (req, res) => {
   const query = { "tutorProfile.status": "approved", role: "tutor" };
-  const cursor = usersCollection.find(query).limit(5).project({
-    displayName: 1,
-    photoURL: 1,
-    "tutorProfile.institution": 1,
-    "tutorProfile.experience": 1,
-    "tutorProfile.qualification": 1,
-  });
+  const { limit } = req.query;
+  const cursor = usersCollection
+    .find(query)
+    .limit(Number(limit) ? Number(limit) : 0)
+    .project({
+      displayName: 1,
+      photoURL: 1,
+      "tutorProfile.institution": 1,
+      "tutorProfile.experience": 1,
+      "tutorProfile.qualification": 1,
+    });
 
   const result = await cursor.toArray();
   res.send(result);
