@@ -2,3 +2,5 @@
 node_modules
 .vscode
 firebase-admin-sdk.json
+firebaseKey.js
+.vercel

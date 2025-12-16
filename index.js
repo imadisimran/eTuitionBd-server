@@ -4,17 +4,41 @@ const cors = require("cors");
 require("dotenv").config();
 const { MongoClient, ServerApiVersion, ObjectId } = require("mongodb");
 const admin = require("firebase-admin");
-const serviceAccount = require("./firebase-admin-sdk.json");
+const decoded = Buffer.from(process.env.FIREBASE_ADMIN, "base64").toString(
+  "utf8"
+);
+const serviceAccount = JSON.parse(decoded);
 const port = process.env.PORT || 3000;
 const stripe = require("stripe")(process.env.STRIPE_API_KEY);
+
+admin.initializeApp({
+  credential: admin.credential.cert(serviceAccount),
+});
 
 //Middleware
 app.use(express.json());
 app.use(cors());
 
-admin.initializeApp({
-  credential: admin.credential.cert(serviceAccount),
+const uri = `mongodb+srv://${process.env.DB_USER}:${process.env.DB_PASS}@cluster0.xc8a26e.mongodb.net/?appName=Cluster0`;
+
+const client = new MongoClient(uri, {
+  serverApi: {
+    version: ServerApiVersion.v1,
+    strict: true,
+    deprecationErrors: true,
+  },
 });
+
+// This code is added for vercel deployment
+let clientPromise;
+if (process.env.NODE_ENV === "development") {
+  if (!global._mongoClientPromise) {
+    global._mongoClientPromise = client.connect();
+  }
+  clientPromise = global._mongoClientPromise;
+} else {
+  clientPromise = client.connect();
+}
 
 const verifyFBToken = async (req, res, next) => {
   const authorization = req.headers.authorization;
@@ -164,16 +188,6 @@ const checkProfile = (user) => {
     missingItems: missing,
   };
 };
-
-const uri = `mongodb+srv://${process.env.DB_USER}:${process.env.DB_PASS}@cluster0.xc8a26e.mongodb.net/?appName=Cluster0`;
-
-const client = new MongoClient(uri, {
-  serverApi: {
-    version: ServerApiVersion.v1,
-    strict: true,
-    deprecationErrors: true,
-  },
-});
 
 //Collections
 const db = client.db("eTuitionBD");
@@ -333,12 +347,11 @@ app.get("/users", verifyFBToken, verifyAdmin, async (req, res) => {
       const profileStatus = checkProfile(user);
       user.profileStatus = {
         percent: profileStatus.percent,
-        isReady: profileStatus.isReady,
       };
     }
   });
   const result = users.map((user) => {
-    return {
+    const userInfo = {
       displayName: user?.displayName,
       email: user?.email,
       role: user?.role,
@@ -347,6 +360,10 @@ app.get("/users", verifyFBToken, verifyAdmin, async (req, res) => {
       percent: user?.profileStatus?.percent,
       _id: user._id,
     };
+    if (user?.role === "tutor") {
+      userInfo.status = user?.tutorProfile?.status;
+    }
+    return userInfo;
   });
   // console.log(users);
   res.send(result);
@@ -1064,21 +1081,27 @@ app.patch("/user/role", verifyFBToken, verifyAdmin, async (req, res) => {
   res.send(changeRole);
 });
 
-async function run() {
-  try {
-    // Connect the client to the server	(optional starting in v4.7)
-    await client.connect();
-    // Send a ping to confirm a successful connection
-    await client.db("admin").command({ ping: 1 });
-    console.log(
-      "Pinged your deployment. You successfully connected to MongoDB!"
-    );
-    app.listen(port, () => {
-      console.log(`Example app listening on port ${port}`);
-    });
-  } finally {
-    // Ensures that the client will close when you finish/error
-    // await client.close();
-  }
+// async function run() {
+//   try {
+//     // Connect the client to the server	(optional starting in v4.7)
+//     await client.connect();
+
+//     app.listen(port, () => {
+//       console.log(`Example app listening on port ${port}`);
+//     });
+//   } finally {
+//     // Ensures that the client will close when you finish/error
+//     // await client.close();
+//   }
+// }
+// run().catch(console.dir);
+
+//Added for vercel deployment
+
+if (require.main === module) {
+  app.listen(port, () => {
+    console.log(`Server running on port ${port}`);
+  });
 }
-run().catch(console.dir);
+
+module.exports = app;
