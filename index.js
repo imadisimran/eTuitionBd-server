@@ -407,10 +407,10 @@ app.post("/tuitions", verifyFBToken, verifyEmail, async (req, res) => {
     return res.status(400).send({ message: "only student can post" });
   }
 
-  const profileStatus = checkProfile(userData);
-  if (!profileStatus.isReady) {
-    return res.status(400).send({ message: "Profile is not completed" });
-  }
+  // const profileStatus = checkProfile(userData);
+  // if (!profileStatus.isReady) {
+  //   return res.status(400).send({ message: "Profile is not completed" });
+  // }
 
   const {
     title,
