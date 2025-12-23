@@ -305,6 +305,7 @@ app.patch("/user", verifyFBToken, async (req, res) => {
       bio: data.tutorProfile.bio,
       subjects: data.tutorProfile.subjects,
       education: data.tutorProfile.education,
+      status: "pending",
     };
   }
 
