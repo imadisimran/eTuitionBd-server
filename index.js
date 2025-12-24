@@ -613,7 +613,7 @@ app.patch("/tuition/:id", verifyFBToken, async (req, res) => {
       $set: {
         title: data.title,
         subject: data.subject,
-        class: data.class,
+        // class: data.class,
         medium: data.medium,
         salaryRange: {
           min: Number(data.salaryRange.min),
